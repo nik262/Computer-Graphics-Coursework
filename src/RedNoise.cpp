@@ -183,11 +183,6 @@ void fillTextureTriangle(CanvasTriangle trianglepoints,  DrawingWindow &window, 
 	if(trianglepoints.v0().y > trianglepoints.v2().y) std::swap( trianglepoints.v0(), trianglepoints.v2());
 	if(trianglepoints.v1().y > trianglepoints.v2().y) std::swap( trianglepoints.v1(), trianglepoints.v2());
 
-	//TexturePoint textv0 = trianglepoints.v0().texturePoint;
-	//TexturePoint textv1 = trianglepoints.v1().texturePoint;
-	//TexturePoint textv2 = trianglepoints.v2().texturePoint;
-
-	
 	//finding x coordinate of middle point of the triangle using slope and making it a canvas point
 	float slope = (trianglepoints.v2().y - trianglepoints.v0().y ) / (trianglepoints.v2().x - trianglepoints.v0().x);
 	float middleX = ( (trianglepoints.v1().y - trianglepoints.v0().y) / slope ) + trianglepoints.v0().x ;
@@ -220,48 +215,6 @@ void fillTextureTriangle(CanvasTriangle trianglepoints,  DrawingWindow &window, 
 	//solving for middlepoints texture point 
 	middlepoint.texturePoint.x = trianglepoints.v0().texturePoint.x - textv0midx ; 
 	middlepoint.texturePoint.y = trianglepoints.v0().texturePoint.y - textv0midy ; 
-
-
-
-
-
-	/*
-	//finding teexture points by iterating through middle points
-	float textslope = (textv2.y - textv0.y ) / (textv2.x - textv0.x);
-	float textmiddleX = ( (textv1.y - textv0.y) / slope ) + textv0.x ;
-	middlepoint.texturePoint.x = textmiddleX;
-	middlepoint.texturePoint.y = textv1.y;
-	
-
-
-	std::vector<float> middlepointsx = interpolateSingleFloats(trianglepoints.v0().x, trianglepoints.v2().x, (trianglepoints.v2().y-trianglepoints.v0().y));
-	std::vector<float> middlepointsy = interpolateSingleFloats(trianglepoints.v0().y, trianglepoints.v2().y, (trianglepoints.v2().y-trianglepoints.v0().y));
-
-	std::vector<float> texturedmiddlepointsx = interpolateSingleFloats(textv0.x, textv2.x, (trianglepoints.v2().y-trianglepoints.v0().y));
-	std::vector<float> texturedmiddlepointsy = interpolateSingleFloats(textv0.y, textv2.y, (trianglepoints.v2().y-trianglepoints.v0().y));
-
-	
-	int pi = 8008 ; 
-
-	for( float i=0; i< (trianglepoints.v2().y-trianglepoints.v0().y); i++){
-
-		
-
-		//std::cout << middlepointsx[i];
-
-		if(( (middleX == middlepointsx[i] ) && (trianglepoints.v1().y==middlepointsy[i]) )  ){
-
-			std::cout << pi;
-			middlepoint.texturePoint.x = texturedmiddlepointsx[i];
-			middlepoint.texturePoint.y = texturedmiddlepointsy[i];
-
-
-		}
-	}
-	*/
-
-	//std::cout << middlepoint.texturePoint.x;
-	//std::cout << middlepoint.texturePoint.y;
 
 	//making top and bottom triangles
 	//CanvasTriangle toptriangle(trianglepoints.v0(), middlepoint, trianglepoints.v1());
