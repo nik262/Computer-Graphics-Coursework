@@ -108,7 +108,7 @@ void drawTexturedLine(CanvasPoint from, CanvasPoint to, TexturePoint textfrom, T
 		window.setPixelColour(x, y,  map.pixels[ (textx)+ (map.width * texty) ]);
 
 	}
-	//test
+	//tester
 }
 
 void drawStrokedTriangles(CanvasTriangle vertices, Colour colour, DrawingWindow &window){
