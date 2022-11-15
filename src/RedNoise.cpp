@@ -21,6 +21,8 @@
 #define WIDTH 320
 #define HEIGHT 240
 
+std::vector<std::vector<float>> depthbuffer;
+
 std::vector<float> interpolateSingleFloats(float from, float to, float numberOfValues) {
 
 	float range = (to-from)/float(numberOfValues-1) ;
@@ -58,23 +60,41 @@ void drawLine( CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &w
 
 	float fromX = from.x;
 	float fromY = from.y;
+	float fromdepth = from.depth;
 
 	float toX = to.x;
 	float toY = to.y;
+	float todepth = to.depth;
 
 	float Xdiff = toX - fromX ;
 	float Ydiff = toY - fromY ;
+	float depthdiff = todepth - fromdepth ;
 
 	float numberofsteps = std::max(abs(Xdiff), abs(Ydiff));
 	float xstepsize = Xdiff/numberofsteps;
 	float ystepsize = Ydiff/numberofsteps;
+	float depthstepsize= depthdiff/numberofsteps;
+	std::cout<< from.depth<<std::endl;
 	
 
-	for (float i=0.0; i<numberofsteps; i++){
+	for (float i=0.0; i<=numberofsteps+1; i++){
 
 		float x = fromX + (xstepsize*i);
 		float y = fromY+ (ystepsize*i);
-		window.setPixelColour(round(x), round(y),  colourpixel(colour.red, colour.blue, colour.green));
+		float depth = fromdepth + (depthstepsize*i);
+
+		
+
+		if ( 1/depth >= depthbuffer[x][y] ){
+
+			
+			//std::cout<< depth<<std::endl;
+			window.setPixelColour(int(x), int(y),  colourpixel(colour.red, colour.blue, colour.green));
+			depthbuffer[int(x)][int(y)]= 1/depth;
+			 
+		}
+
+		//window.setPixelColour(round(x), round(y),  colourpixel(colour.red, colour.blue, colour.green));
 
 	}
 
@@ -125,24 +145,33 @@ void interpolateAndFillTriangle(CanvasPoint v0, CanvasPoint v1, CanvasPoint midd
 	//interpolate between v0 and middlepoint
 	std::vector<float> v0midx = interpolateSingleFloats(v0.x, middlepoint.x, h+1);
 	std::vector<float> v0midy = interpolateSingleFloats(v0.y, middlepoint.y, h+1);
+	//interpolate depth values
+	std::vector<float> v0middepth = interpolateSingleFloats(v0.depth, middlepoint.depth, h+1);
+
+
+	
 
 	//interpolate between v0 and v1
 	std::vector<float> v0v1x = interpolateSingleFloats(v0.x, v1.x, h+1);
 	std::vector<float> v0v1y = interpolateSingleFloats(v0.y, v1.y, h+1);
 
-	//for loop to draw lines from v0mid points to v0v1 points
-	for(float i=0.0; i< h; i++){
+	std::vector<float> v0v1depth = interpolateSingleFloats(v0.depth, v1.depth, h+1);
 
-		CanvasPoint from(v0midx[i], v0midy[i]);
-		CanvasPoint to(v0v1x[i], v0v1y[i]);
+	//for loop to draw lines from v0mid points to v0v1 points
+	for(float i=0.0; i<=h; i++){
+
+		CanvasPoint from(v0midx[i], v0midy[i], v0middepth[i]);
+		CanvasPoint to(v0v1x[i], v0v1y[i], v0v1depth[i]);
+
 		drawLine(from,to,colour,window);
+	
 	}
 
 
 }
 
 void interpolateAndFillTexture(CanvasPoint v0, CanvasPoint v1, CanvasPoint middlepoint, float h, float texth, TextureMap map, Colour colour, DrawingWindow &window){
-
+	//did some changes to height check again 
 	//interpolate between v0 and middlepoint
 	std::vector<float> v0midx = interpolateSingleFloats(v0.x, middlepoint.x, h+1);
 	std::vector<float> v0midy = interpolateSingleFloats(v0.y, middlepoint.y, h+1);
@@ -175,7 +204,7 @@ void interpolateAndFillTexture(CanvasPoint v0, CanvasPoint v1, CanvasPoint middl
 }
 
 void fillTextureTriangle(CanvasTriangle trianglepoints,  DrawingWindow &window, Colour colour){
-
+	//did some changes to height
 	TextureMap map = TextureMap("texturemap.pbm");
 	
 
@@ -249,16 +278,29 @@ void fill( CanvasTriangle trianglepoints, Colour colour, DrawingWindow &window){
 	float middleX = ( (trianglepoints.v1().y - trianglepoints.v0().y) / slope ) + trianglepoints.v0().x ;
 	CanvasPoint middlepoint( middleX, trianglepoints.v1().y);
 
+	//finding depth of middle point
+	//v0-mid  y coordinates differences
+	float v0midy = trianglepoints.v0().y - middlepoint.y ; 
+	//v0-v2 y coordinates differences
+	float v0v2y = trianglepoints.v0().y - trianglepoints.v2().y ; 
+	//v0mid ratio for  y 
+	float v0midyratio = v0midy/v0v2y ;
+	float v0v2depth =  (trianglepoints.v0().depth - trianglepoints.v2().depth);
+	middlepoint.depth = trianglepoints.v0().depth - ( v0midyratio * v0v2depth );
+
+
 	//making top and bottom triangles
 	CanvasTriangle toptriangle(trianglepoints.v0(), trianglepoints.v1(), middlepoint);//swapped v1 and middlepoint
 	CanvasTriangle bottomtriangle( middlepoint, trianglepoints.v1(), trianglepoints.v2());
 
-	std::cout<<trianglepoints.v0().x<<std::endl;
+	
 
 	//top triangle filling
 	drawStrokedTriangles(toptriangle, colour, window);
 	float htop = middlepoint.y - trianglepoints.v0().y ; //height of top triangle
 	interpolateAndFillTriangle(trianglepoints.v0(), trianglepoints.v1(), middlepoint, htop, colour, window);
+
+	drawLine(middlepoint,trianglepoints.v1(), colour, window);
 
 	//bottom triangle filling 
 	drawStrokedTriangles(bottomtriangle, colour, window);
@@ -306,7 +348,7 @@ std::vector<ModelTriangle> parseObj (std::string mtlfilepath, std::string objfil
 			int g = 255* stof(token[2]);
 			int b = 255* stof(token[3]) ;
 
-			colhashmap[mtlcolourname] = Colour(mtlcolourname, r, g, b);
+			colhashmap[mtlcolourname] = Colour(mtlcolourname, r, g, b );
 
 		}
 	
@@ -315,7 +357,7 @@ std::vector<ModelTriangle> parseObj (std::string mtlfilepath, std::string objfil
 	mtlfile.close();
 
 
-	//reading onj file
+	//reading obj file
 	while(getline(objfile, objline)){
 
 		
@@ -351,12 +393,13 @@ CanvasPoint getCanvasIntersectionPoint(glm::vec3  camerapostion, glm::vec3 verte
 
 	glm::vec3  currvertexpos = vertexpostion - camerapostion ; 
 
+	float depth = abs(currvertexpos.z);
 	float imagepointx =   (-180 * (focalLength * (currvertexpos.x / currvertexpos.z))) + (WIDTH/ 2) ;
 	float imagepointy =   (180 * (focalLength * (currvertexpos.y / currvertexpos.z))) + (HEIGHT/ 2) ;
 
 	
 
-	return CanvasPoint (imagepointx, imagepointy);
+	return CanvasPoint (imagepointx, imagepointy, depth);
 
 }
 
@@ -485,9 +528,9 @@ void keypress(DrawingWindow &window){
 
 	//renderPointCloud(x, cameraposition, focallength, window);
 
-	//wireFrameRender(x, cameraposition, focallength, window);
+	wireFrameRender(x, cameraposition, focallength, window);
 
-	rasterizedRender(x, cameraposition, focallength, window);
+	//rasterizedRender(x, cameraposition, focallength, window);
 
 	//fill(trianglepoints, colour, window);
 
@@ -536,6 +579,16 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 int main(int argc, char *argv[]) {
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
+
+	//making all values of depth buffer 0.0
+	depthbuffer.resize(WIDTH);
+	for (int x =0 ; x< WIDTH ; x++){
+		depthbuffer[x].resize(HEIGHT);
+		for(int y = 0; y<HEIGHT; y++ ){
+			depthbuffer[x][y]=0.0;
+		}
+	}
+
 
 	
 
