@@ -22,6 +22,19 @@
 #define HEIGHT 240
 
 std::vector<std::vector<float>> depthbuffer;
+glm::vec3 cameraposition(0.0, 0.0, 4.0);
+float camposchange = 0.1;
+float focallength = 2.0 ;
+
+float rotchange = glm::radians(0.1);
+glm::mat3 rotmatrix = glm::mat3(1.0);
+glm::mat3 orientationmat = glm::mat3(
+   1.0, 0.0, 0.0, // first column 
+   0.0, 1.0, 0.0, // second column
+   0.0, 0.0, 1.0  // third column
+);
+
+bool orbit = false;
 
 std::vector<float> interpolateSingleFloats(float from, float to, float numberOfValues) {
 
@@ -74,25 +87,28 @@ void drawLine( CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &w
 	float xstepsize = Xdiff/numberofsteps;
 	float ystepsize = Ydiff/numberofsteps;
 	float depthstepsize= depthdiff/numberofsteps;
-	std::cout<< from.depth<<std::endl;
+	
 	
 
-	for (float i=0.0; i<=numberofsteps+1; i++){
+	for (float i=0.0; i<numberofsteps; i++){
 
 		float x = fromX + (xstepsize*i);
 		float y = fromY+ (ystepsize*i);
 		float depth = fromdepth + (depthstepsize*i);
 
 		
+		if ((y>=0 && x>=0) &&(x<WIDTH && y < HEIGHT)){
 
-		if ( 1/depth >= depthbuffer[x][y] ){
-
+			if ( 1/depth >= depthbuffer[x][y] ){
 			
 			//std::cout<< depth<<std::endl;
 			window.setPixelColour(int(x), int(y),  colourpixel(colour.red, colour.blue, colour.green));
 			depthbuffer[int(x)][int(y)]= 1/depth;
 			 
 		}
+
+		}
+		
 
 		//window.setPixelColour(round(x), round(y),  colourpixel(colour.red, colour.blue, colour.green));
 
@@ -158,7 +174,7 @@ void interpolateAndFillTriangle(CanvasPoint v0, CanvasPoint v1, CanvasPoint midd
 	std::vector<float> v0v1depth = interpolateSingleFloats(v0.depth, v1.depth, h+1);
 
 	//for loop to draw lines from v0mid points to v0v1 points
-	for(float i=0.0; i<=h; i++){
+	for(float i=0.0; i<h; i++){
 
 		CanvasPoint from(v0midx[i], v0midy[i], v0middepth[i]);
 		CanvasPoint to(v0v1x[i], v0v1y[i], v0v1depth[i]);
@@ -391,7 +407,8 @@ std::vector<ModelTriangle> parseObj (std::string mtlfilepath, std::string objfil
 
 CanvasPoint getCanvasIntersectionPoint(glm::vec3  camerapostion, glm::vec3 vertexpostion, float focalLength){
 
-	glm::vec3  currvertexpos = vertexpostion - camerapostion ; 
+	glm::vec3  currvertexpos = vertexpostion - camerapostion ;
+	currvertexpos = currvertexpos * orientationmat ; 
 
 	float depth = abs(currvertexpos.z);
 	float imagepointx =   (-180 * (focalLength * (currvertexpos.x / currvertexpos.z))) + (WIDTH/ 2) ;
@@ -523,14 +540,14 @@ void keypress(DrawingWindow &window){
 	// 	std::cout << x[i];
 	// }
 
-	glm::vec3 cameraposition(0.0, 0.0, 4.0);
-	float focallength = 2.0 ; 
+	//glm::vec3 cameraposition(0.0, 0.0, 4.0);
+	//float focallength = 2.0 ; 
 
 	//renderPointCloud(x, cameraposition, focallength, window);
 
-	wireFrameRender(x, cameraposition, focallength, window);
+	//wireFrameRender(x, cameraposition, focallength, window);
 
-	//rasterizedRender(x, cameraposition, focallength, window);
+	rasterizedRender(x, cameraposition, focallength, window);
 
 	//fill(trianglepoints, colour, window);
 
@@ -539,37 +556,102 @@ void keypress(DrawingWindow &window){
 
 }
 
-void draw(DrawingWindow &window) {
+glm::mat3 lookAt() {
+	glm::vec3 forward = glm::normalize(cameraposition);
+	glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0,1,0)));
+	glm::vec3 up = glm::normalize(glm::cross(forward, right));
+	return glm::transpose(glm::mat3(right, up, forward));
+}
 
-	glm::vec3 topleft(255,0,0);
-	glm::vec3 topright (0,0,255);
-	glm::vec3 bottomright(0, 255,0);
-	glm::vec3 bottomleft(255, 255, 0);
+void orbitrender(){
+	rotmatrix = lookAt();
+}
 
-	std::vector<glm::vec3> left = interpolateThreeElementValues(topleft,bottomleft, window.height);
-	std::vector<glm::vec3> right = interpolateThreeElementValues(topright,bottomright, window.height);
+void draw(DrawingWindow &window, std::vector<ModelTriangle> triangle, bool orbit) {
 
-	window.clearPixels();
-
-	for (size_t y = 0; y < window.height; y++) {
-		std::vector<glm::vec3> row = interpolateThreeElementValues(left[y],right[y], window.width);
-		for (size_t x = 0; x < window.width; x++) {
-			
-			uint32_t colour = (255 << 24) + (int(row[x].r) << 16) + (int(row[x].g) << 8) + int(row[x].b);
-			window.setPixelColour(x, y, colour);
-
+	for(int x = 0; x < WIDTH; x++) {
+		for(int y = 0; y < HEIGHT; y++) {
+			depthbuffer[x][y] = 0.0;
 		}
 	}
+	window.clearPixels(); 
+
+	 
+
+	if (orbit){
+		glm::mat3 newrotationMat(
+			glm::cos(rotchange),0.0,-glm::sin(rotchange),
+			0.0,1.0,0.0,
+			glm::sin(rotchange),0.0,glm::cos(rotchange)
+		);
+		cameraposition = newrotationMat * cameraposition;
+		orbitrender();
+	}
+	//rotmatrix = newrotationMat * rotmatrix;
+	
+
+	
+
+	rasterizedRender(triangle, cameraposition, focallength, window);
+	
 
 }
 
 void handleEvent(SDL_Event event, DrawingWindow &window) {
 	if (event.type == SDL_KEYDOWN) {
-		if (event.key.keysym.sym == SDLK_LEFT) std::cout << "LEFT" << std::endl;
-		else if (event.key.keysym.sym == SDLK_RIGHT) std::cout << "RIGHT" << std::endl;
-		else if (event.key.keysym.sym == SDLK_UP) std::cout << "UP" << std::endl;
-		else if (event.key.keysym.sym == SDLK_DOWN) std::cout << "DOWN" << std::endl;
-		else if (event.key.keysym.sym == SDLK_w) keypress(window);
+		if (event.key.keysym.sym == SDLK_w) cameraposition.y = cameraposition.y-camposchange;
+		else if (event.key.keysym.sym == SDLK_a) cameraposition.x = cameraposition.x+camposchange;
+		else if (event.key.keysym.sym == SDLK_s) cameraposition.y = cameraposition.y+camposchange;
+		else if (event.key.keysym.sym == SDLK_d) cameraposition.x = cameraposition.x-camposchange;
+		else if (event.key.keysym.sym == SDLK_q) cameraposition.z = cameraposition.z-camposchange;
+		else if (event.key.keysym.sym == SDLK_e) cameraposition.z = cameraposition.z+camposchange;
+
+		else if (event.key.keysym.sym == SDLK_j) {
+			glm::mat3 newrotationMat(
+				1.0,0.0,0.0,
+				0.0,glm::cos(-rotchange),glm::sin(-rotchange),
+				0.0, -glm::sin(-rotchange),glm::cos(-rotchange) 
+			);
+			//rotmatrix = newrotationMat * rotmatrix;
+			orientationmat = newrotationMat * orientationmat;
+		}
+		else if (event.key.keysym.sym == SDLK_u) {
+
+			glm::mat3 newrotationMat(
+				1.0,0.0,0.0,
+				0.0,glm::cos(rotchange),glm::sin(rotchange),
+				0.0, -glm::sin(rotchange),glm::cos(rotchange) 
+			);
+			//rotmatrix = newrotationMat * rotmatrix;
+			orientationmat = newrotationMat * orientationmat;
+
+		}
+		else if (event.key.keysym.sym == SDLK_k) {
+			glm::mat3 newrotationMat(
+				glm::cos(-rotchange),0.0,-glm::sin(-rotchange),
+				0.0,1.0,0.0,
+				glm::sin(-rotchange),0.0,glm::cos(-rotchange)
+			);
+			//rotmatrix = newrotationMat * rotmatrix;
+			orientationmat = newrotationMat * orientationmat;
+		}
+		else if (event.key.keysym.sym == SDLK_h) {
+
+			glm::mat3 newrotationMat(
+				glm::cos(rotchange),0.0,-glm::sin(rotchange),
+				0.0,1.0,0.0,
+				glm::sin(rotchange),0.0,glm::cos(rotchange)
+			);
+			//rotmatrix = newrotationMat * rotmatrix;
+			orientationmat = newrotationMat * orientationmat;
+
+		}
+
+		else if(event.key.keysym.sym == SDLK_o) {
+			orbit = !orbit;
+		}
+
+		else if (event.key.keysym.sym == SDLK_t) keypress(window);
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
@@ -589,46 +671,42 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	std::vector<ModelTriangle>  x = parseObj("cornell-box.mtl","cornell-box.obj", 0.35);
+
+	// texture mapping points
+	// CanvasPoint v0 ;
+	// v0.x=160;
+	// v0.y=10;
+	// v0.texturePoint.x=195;
+	// v0.texturePoint.y=5;
+	// CanvasPoint v1 ;
+	// v1.x=300;
+	// v1.y=230;
+	// v1.texturePoint.x=395;
+	// v1.texturePoint.y=380;
+	// CanvasPoint v2 ;
+	// v2.x=10;
+	// v2.y=150;
+	// v2.texturePoint.x=65;
+	// v2.texturePoint.y=330;
+	// CanvasTriangle trianglepoints(v0,v1,v2) ;
+
+	// Colour colour;
+	// colour.blue=255;
+	// colour.green=255;
+	// colour.red=255;
+
 
 	
 
 
-	CanvasPoint v0 ;
-	v0.x=160;
-	v0.y=10;
-	v0.texturePoint.x=195;
-	v0.texturePoint.y=5;
-	CanvasPoint v1 ;
-	v1.x=300;
-	v1.y=230;
-	v1.texturePoint.x=395;
-	v1.texturePoint.y=380;
-	CanvasPoint v2 ;
-	v2.x=10;
-	v2.y=150;
-	v2.texturePoint.x=65;
-	v2.texturePoint.y=330;
-	CanvasTriangle trianglepoints(v0,v1,v2) ;
-
-	Colour colour;
-	colour.blue=255;
-	colour.green=255;
-	colour.red=255;
-
-
-	
-
-	/*std::vector<glm::vec3> result;
-	result = interpolateSingleFloats(2.2, 8.5, 7);
-	for(size_t i=0; i<result.size(); i++) std::cout << result[i] << " ";
-	std::cout << std::endl;*/
 
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window);
 		//fillTextureTriangle(trianglepoints, window, colour);
 		
-		//draw(window);
+		draw(window,x,orbit);
 
 		//drawLine(from,to,colour,window);
 		//drawStrokedTriangles(trianglepoints,colour,window);
