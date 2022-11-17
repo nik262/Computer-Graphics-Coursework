@@ -26,13 +26,13 @@ glm::vec3 cameraposition(0.0, 0.0, 4.0);
 float camposchange = 0.1;
 float focallength = 2.0 ;
 
-float rotchange = glm::radians(0.1);
+float rotchange = glm::radians(0.4);
 glm::mat3 rotmatrix = glm::mat3(1.0);
-glm::mat3 orientationmat = glm::mat3(
+/*glm::mat3 orientationmat = glm::mat3(
    1.0, 0.0, 0.0, // first column 
    0.0, 1.0, 0.0, // second column
    0.0, 0.0, 1.0  // third column
-);
+);*/
 
 bool orbit = false;
 
@@ -71,11 +71,11 @@ uint32_t colourpixel (int red, int blue, int green ){
 
 void drawLine( CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &window ){
 
-	float fromX = from.x;
+	float fromX = (from.x);
 	float fromY = from.y;
 	float fromdepth = from.depth;
 
-	float toX = to.x;
+	float toX = (to.x);
 	float toY = to.y;
 	float todepth = to.depth;
 
@@ -90,22 +90,28 @@ void drawLine( CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &w
 	
 	
 
-	for (float i=0.0; i<numberofsteps; i++){
+		for (float i=0.0; i<=numberofsteps+1; i++){
 
-		float x = fromX + (xstepsize*i);
-		float y = fromY+ (ystepsize*i);
+		float x = (fromX + (xstepsize*i));
+		float y = (fromY+ (ystepsize*i));
 		float depth = fromdepth + (depthstepsize*i);
 
 		
-		if ((y>=0 && x>=0) &&(x<WIDTH && y < HEIGHT)){
+		if ((y>=0 && x>=0) &&(x<WIDTH && y < HEIGHT) ){
 
-			if ( 1/depth >= depthbuffer[x][y] ){
+			if( depth == 0.0){
+				window.setPixelColour(floor(x), floor(y),  colourpixel(colour.red, colour.blue, colour.green));
+				depthbuffer[int(x)][int(y)]= depth;
+
+			}
+
+			else if ( depth >= depthbuffer[x][y] ){
 			
 			//std::cout<< depth<<std::endl;
 			window.setPixelColour(int(x), int(y),  colourpixel(colour.red, colour.blue, colour.green));
-			depthbuffer[int(x)][int(y)]= 1/depth;
+			depthbuffer[int(x)][int(y)]= depth;
 			 
-		}
+			}
 
 		}
 		
@@ -113,6 +119,8 @@ void drawLine( CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &w
 		//window.setPixelColour(round(x), round(y),  colourpixel(colour.red, colour.blue, colour.green));
 
 	}
+	
+	
 
 }
 
@@ -174,12 +182,13 @@ void interpolateAndFillTriangle(CanvasPoint v0, CanvasPoint v1, CanvasPoint midd
 	std::vector<float> v0v1depth = interpolateSingleFloats(v0.depth, v1.depth, h+1);
 
 	//for loop to draw lines from v0mid points to v0v1 points
-	for(float i=0.0; i<h; i++){
+	for(float i=0.0; i<=h; i++){
 
 		CanvasPoint from(v0midx[i], v0midy[i], v0middepth[i]);
 		CanvasPoint to(v0v1x[i], v0v1y[i], v0v1depth[i]);
 
 		drawLine(from,to,colour,window);
+		drawLine(middlepoint, v1, colour, window);
 	
 	}
 
@@ -408,11 +417,18 @@ std::vector<ModelTriangle> parseObj (std::string mtlfilepath, std::string objfil
 CanvasPoint getCanvasIntersectionPoint(glm::vec3  camerapostion, glm::vec3 vertexpostion, float focalLength){
 
 	glm::vec3  currvertexpos = vertexpostion - camerapostion ;
-	currvertexpos = currvertexpos * orientationmat ; 
+	currvertexpos = rotmatrix*currvertexpos; 
 
-	float depth = abs(currvertexpos.z);
+
+	
 	float imagepointx =   (-180 * (focalLength * (currvertexpos.x / currvertexpos.z))) + (WIDTH/ 2) ;
 	float imagepointy =   (180 * (focalLength * (currvertexpos.y / currvertexpos.z))) + (HEIGHT/ 2) ;
+
+	float depth = INFINITY;
+
+	if (currvertexpos.z != 0.0){
+		depth = abs(1/currvertexpos.z);
+	}
 
 	
 
@@ -556,15 +572,19 @@ void keypress(DrawingWindow &window){
 
 }
 
-glm::mat3 lookAt() {
-	glm::vec3 forward = glm::normalize(cameraposition);
-	glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0,1,0)));
+glm::mat3 lookAt(glm::vec3 target) {
+	glm::vec3 forward = glm::normalize(cameraposition-target);
+	glm::vec3 right = -glm::normalize(glm::cross(forward, glm::vec3(0,1,0)));
 	glm::vec3 up = glm::normalize(glm::cross(forward, right));
-	return glm::transpose(glm::mat3(right, up, forward));
+
+	//right up forward
+	return transpose(glm::mat3( right, up, forward ));
 }
 
 void orbitrender(){
-	rotmatrix = lookAt();
+	glm::vec3 target(0.0,0.0,0.0);
+
+	rotmatrix = lookAt(target);
 }
 
 void draw(DrawingWindow &window, std::vector<ModelTriangle> triangle, bool orbit) {
@@ -612,8 +632,8 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 				0.0,glm::cos(-rotchange),glm::sin(-rotchange),
 				0.0, -glm::sin(-rotchange),glm::cos(-rotchange) 
 			);
-			//rotmatrix = newrotationMat * rotmatrix;
-			orientationmat = newrotationMat * orientationmat;
+			rotmatrix = newrotationMat * rotmatrix;
+			//orientationmat = newrotationMat * orientationmat;
 		}
 		else if (event.key.keysym.sym == SDLK_u) {
 
@@ -622,8 +642,8 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 				0.0,glm::cos(rotchange),glm::sin(rotchange),
 				0.0, -glm::sin(rotchange),glm::cos(rotchange) 
 			);
-			//rotmatrix = newrotationMat * rotmatrix;
-			orientationmat = newrotationMat * orientationmat;
+			rotmatrix = newrotationMat * rotmatrix;
+			//orientationmat = newrotationMat * orientationmat;
 
 		}
 		else if (event.key.keysym.sym == SDLK_k) {
@@ -632,8 +652,8 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 				0.0,1.0,0.0,
 				glm::sin(-rotchange),0.0,glm::cos(-rotchange)
 			);
-			//rotmatrix = newrotationMat * rotmatrix;
-			orientationmat = newrotationMat * orientationmat;
+			rotmatrix = newrotationMat * rotmatrix;
+			//orientationmat = newrotationMat * orientationmat;
 		}
 		else if (event.key.keysym.sym == SDLK_h) {
 
@@ -642,8 +662,8 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 				0.0,1.0,0.0,
 				glm::sin(rotchange),0.0,glm::cos(rotchange)
 			);
-			//rotmatrix = newrotationMat * rotmatrix;
-			orientationmat = newrotationMat * orientationmat;
+			rotmatrix = newrotationMat * rotmatrix;
+			//orientationmat = newrotationMat * orientationmat;
 
 		}
 
