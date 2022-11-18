@@ -22,10 +22,14 @@
 #define WIDTH 320
 #define HEIGHT 240
 
+Colour BLACK(255,255,255);
+
 std::vector<std::vector<float>> depthbuffer;
 glm::vec3 cameraposition(0.0, 0.0, 4.0);
 float camposchange = 0.1;
 float focallength = 2.0 ;
+glm::vec3 lightsource(0.85, 0.85, 0.0);
+
 std::string mappath;
 
 float rotchange = glm::radians(0.4);
@@ -65,6 +69,7 @@ std::vector<glm::vec3> interpolateThreeElementValues( glm::vec3 from, glm::vec3 
 
 
 }
+
 uint32_t colourpixel (int red, int blue, int green ){
 
 	uint32_t colour = (255 << 24) + (int(red) << 16) + (int(green) << 8) + int(blue);
@@ -347,6 +352,320 @@ void fill( CanvasTriangle trianglepoints, Colour colour, DrawingWindow &window){
 
 }
 
+CanvasPoint getCanvasIntersectionPoint(glm::vec3  camerapostion, glm::vec3 vertexpostion, float focalLength){
+
+	glm::vec3  currvertexpos = vertexpostion - camerapostion ;
+	currvertexpos = rotmatrix*currvertexpos; 
+
+
+	
+	float imagepointx =   (-180 * (focalLength * (currvertexpos.x / currvertexpos.z))) + (WIDTH/ 2) ;
+	float imagepointy =   (180 * (focalLength * (currvertexpos.y / currvertexpos.z))) + (HEIGHT/ 2) ;
+
+	float depth = INFINITY;
+
+	if (currvertexpos.z != 0.0){
+		depth = abs(1/currvertexpos.z);
+	}
+
+	
+
+	return CanvasPoint (imagepointx, imagepointy, depth);
+
+}
+
+void renderPointCloud (std::vector<ModelTriangle> triangles, glm::vec3 cameraposition, float focallength, DrawingWindow &window ){
+
+	int r = 255 ;
+	int g = 255 ;
+	int b = 255 ;
+
+	uint32_t colour = (255 << 24) + (int(r) << 16) + (int(g) << 8) + int(b);
+
+	for( int i=0; i<triangles.size(); i++){
+
+		CanvasPoint v0 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[0], focallength);
+		CanvasPoint v1 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[1], focallength);
+		CanvasPoint v2 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[2], focallength);
+
+		if( (v0.x >= 0 && v0.x< WIDTH) && (v0.y >= 0 && v0.y< HEIGHT)){
+			
+			window.setPixelColour(v0.x, v0.y, colour);
+			
+
+		}
+		if( (v1.x >= 0 && v1.x< WIDTH) && (v1.y >= 0 && v1.y< HEIGHT)){
+
+			window.setPixelColour(v1.x, v1.y, colour);
+
+		}
+		if( (v2.x >= 0 && v2.x< WIDTH) && (v2.y >= 0 && v2.y< HEIGHT)){
+
+			window.setPixelColour(v2.x, v2.y, colour);
+
+		}
+		
+		
+	}
+
+}
+
+void wireFrameRender(std::vector<ModelTriangle> triangles, glm::vec3 cameraposition, float focallength, DrawingWindow &window ){
+
+	int r = 255 ;
+	int g = 255 ;
+	int b = 255 ;
+
+	//uint32_t colour = (255 << 24) + (int(r) << 16) + (int(g) << 8) + int(b);
+	Colour colour(r,g,b);
+
+	for( int i=0; i<triangles.size(); i++){
+
+		CanvasPoint v0 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[0], focallength);
+		CanvasPoint v1 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[1], focallength);
+		CanvasPoint v2 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[2], focallength);
+
+		CanvasTriangle triangle(v0, v1, v2);
+
+		drawStrokedTriangles(triangle,colour, window);
+		
+	}
+
+}
+
+void rasterizedRender(std::vector<ModelTriangle> triangles, glm::vec3 cameraposition, float focallength, DrawingWindow &window ){
+	
+
+	for( int i=0; i<triangles.size(); i++){
+
+		CanvasPoint v0 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[0], focallength);
+		CanvasPoint v1 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[1], focallength);
+		CanvasPoint v2 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[2], focallength);
+
+		v0.texturePoint= triangles[i].texturePoints[0];
+		v1.texturePoint= triangles[i].texturePoints[1];
+		v2.texturePoint= triangles[i].texturePoints[2];
+
+		//std::cout<< v0.texturePoint;
+		
+
+		CanvasTriangle imageplanetriangle{v0, v1, v2};
+
+		int r = triangles[i].colour.red ;
+		int g = triangles[i].colour.green;
+		int b = triangles[i].colour.blue;
+
+		Colour colour(r, g,b);
+
+		/*if ( triangles[i].texturePoints.empty() == false ){
+			fillTextureTriangle(imageplanetriangle, window, colour);
+		}*/
+
+		fill(imageplanetriangle, colour, window);
+
+		
+		
+
+		
+	}
+
+
+}
+
+glm::mat3 lookAt(glm::vec3 target) {
+	glm::vec3 forward = glm::normalize(cameraposition-target);
+	glm::vec3 right = -glm::normalize(glm::cross(forward, glm::vec3(0,1,0)));
+	glm::vec3 up = glm::normalize(glm::cross(forward, right));
+
+	//right up forward
+	return transpose(glm::mat3( right, up, forward ));
+}
+
+void orbitrender(){
+	glm::vec3 target(0.0,0.0,0.0);
+
+	rotmatrix = lookAt(target);
+}
+
+void drawRasterizedScene(DrawingWindow &window, std::vector<ModelTriangle> triangle, bool orbit) {
+
+	for(int x = 0; x < WIDTH; x++) {
+		for(int y = 0; y < HEIGHT; y++) {
+			depthbuffer[x][y] = 0.0;
+		}
+	}
+	window.clearPixels(); 
+
+	 
+
+	if (orbit){
+		glm::mat3 newrotationMat(
+			glm::cos(rotchange),0.0,-glm::sin(rotchange),
+			0.0,1.0,0.0,
+			glm::sin(rotchange),0.0,glm::cos(rotchange)
+		);
+		cameraposition = newrotationMat * cameraposition;
+		orbitrender();
+	}
+	//rotmatrix = newrotationMat * rotmatrix;
+	
+
+	
+
+	rasterizedRender(triangle, cameraposition, focallength, window);
+	
+
+}
+
+RayTriangleIntersection getClosestIntersection(glm::vec3 startpostion, glm::vec3 raydirection, std::vector<ModelTriangle> triangle){
+
+	RayTriangleIntersection closeintersectionpoint ;
+	float closevalcheck = INFINITY;
+
+
+	for(int i = 0 ; i<triangle.size(); i++){
+		
+		glm::vec3 e0 = triangle[i].vertices[1] - triangle[i].vertices[0];
+		glm::vec3 e1 = triangle[i].vertices[2] - triangle[i].vertices[0];
+		glm::vec3 SPVector = startpostion - triangle[i].vertices[0];
+		glm::mat3 DEMatrix(-raydirection, e0, e1);
+		glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
+
+		// (u >= 0.0) && (u <= 1.0)
+		// (v >= 0.0) && (v <= 1.0)
+		// (u + v) <= 1.0
+		if ( 	(possibleSolution.y>= 0.0 && possibleSolution.y <= 1.0 )&& 
+				(possibleSolution.z>= 0.0 && possibleSolution.z <= 1.0) && 
+				(possibleSolution.y+possibleSolution.z <= 1.0) && 
+				(possibleSolution.x > 0 ) && 
+				(possibleSolution.x < closevalcheck)
+			){
+			
+			closevalcheck = possibleSolution.x;
+
+			//storing closest intersection point values
+			glm::vec3 intersecpoint = triangle[i].vertices[0] + possibleSolution.y * (triangle[i].vertices[1]-triangle[i].vertices[0]) + possibleSolution.z*(triangle[i].vertices[2] - triangle[i].vertices[0]);
+
+			closeintersectionpoint.intersectionPoint = intersecpoint;
+			closeintersectionpoint.distanceFromCamera= possibleSolution.x;
+			closeintersectionpoint.intersectedTriangle = triangle[i];
+			closeintersectionpoint.triangleIndex = i;
+
+		}
+	
+	}
+
+	return closeintersectionpoint;	
+	
+}
+RayTriangleIntersection getShadowClosestIntersection(glm::vec3 startpostion, glm::vec3 raydirection, std::vector<ModelTriangle> triangle, int triangleindex){
+
+	RayTriangleIntersection closeintersectionpoint ;
+	float closevalcheck = INFINITY;
+
+
+	for(int i = 0 ; i<triangle.size(); i++){
+		
+		glm::vec3 e0 = triangle[i].vertices[1] - triangle[i].vertices[0];
+		glm::vec3 e1 = triangle[i].vertices[2] - triangle[i].vertices[0];
+		glm::vec3 SPVector = startpostion - triangle[i].vertices[0];
+		glm::mat3 DEMatrix(-raydirection, e0, e1);
+		glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
+
+		// (u >= 0.0) && (u <= 1.0)
+		// (v >= 0.0) && (v <= 1.0)
+		// (u + v) <= 1.0
+		if ( 	(possibleSolution.y>= 0.0 && possibleSolution.y <= 1.0 )&& 
+				(possibleSolution.z>= 0.0 && possibleSolution.z <= 1.0) && 
+				(possibleSolution.y+possibleSolution.z <= 1.0) && 
+				(possibleSolution.x > 0 ) && 
+				(possibleSolution.x < closevalcheck) &&
+				( i != triangleindex) 
+				
+			){
+			
+			closevalcheck = possibleSolution.x;
+
+			//storing closest intersection point values
+			glm::vec3 intersecpoint = triangle[i].vertices[0] + possibleSolution.y * (triangle[i].vertices[1]-triangle[i].vertices[0]) + possibleSolution.z*(triangle[i].vertices[2] - triangle[i].vertices[0]);
+
+			closeintersectionpoint.intersectionPoint = intersecpoint;
+			closeintersectionpoint.distanceFromCamera= possibleSolution.x;
+			closeintersectionpoint.intersectedTriangle = triangle[i];
+			closeintersectionpoint.triangleIndex = i;
+
+		}
+	
+	}
+
+	return closeintersectionpoint;	
+	
+}
+
+void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
+
+	for(int x = 0; x < WIDTH; x++) {
+		for(int y = 0; y < HEIGHT; y++) {
+			depthbuffer[x][y] = 0.0;
+		}
+	}
+	
+
+	for (float i=0.0; i< WIDTH ; i++){
+		for (float j =0.0; j< HEIGHT ; j++){
+
+			CanvasPoint xpoint ={i,j};
+
+		// float depth = INFINITY;
+
+			//float imagepointx =   (-180 * (focalLength * (currvertexpos.x / currvertexpos.z))) + (WIDTH/ 2) ;
+		
+			float x = ((i- WIDTH/ 2) / 180) / focallength;
+		
+			float y= - (( j- HEIGHT/ 2) / 180) / focallength;
+			float z = -1;
+
+			glm::vec3 raypoint(x,y,z);
+			glm::vec3 raydirection = glm::normalize(raypoint);
+
+			
+
+			RayTriangleIntersection ip = getClosestIntersection(cameraposition, raydirection, triangle);
+
+			glm::vec3 light = lightsource - ip.intersectionPoint ; 
+			glm::vec3 lightdirec = glm::normalize(light);
+
+
+			RayTriangleIntersection shadowip = getShadowClosestIntersection(ip.intersectionPoint, lightdirec ,triangle, ip.triangleIndex);
+
+		
+			
+			int red = ip.intersectedTriangle.colour.red;
+			int blue = ip.intersectedTriangle.colour.blue;
+			int green = ip.intersectedTriangle.colour.green;
+
+			// window.setPixelColour(i,j,colourpixel(red,blue,green));
+
+			// if (shadowip.intersectedTriangle.vertices.empty()==false ){
+			// 	window.setPixelColour(i,j,colourpixel(0,0,0));
+			// }
+
+			if (shadowip.distanceFromCamera < glm::length (lightdirec)){
+				window.setPixelColour(i,j,colourpixel(0, 0, 0));
+
+			}
+			else{
+				window.setPixelColour(i,j,colourpixel(red,blue,green));
+
+			}
+				
+		
+			
+
+		}
+	}
+}
+
 std::vector<ModelTriangle> parseObj (std::string mtlfilepath, std::string objfilepath, float scale){
 
 	std::ifstream objfile(objfilepath);
@@ -453,252 +772,6 @@ std::vector<ModelTriangle> parseObj (std::string mtlfilepath, std::string objfil
 	objfile.close();
 
 	return triangles;
-
-}
-
-CanvasPoint getCanvasIntersectionPoint(glm::vec3  camerapostion, glm::vec3 vertexpostion, float focalLength){
-
-	glm::vec3  currvertexpos = vertexpostion - camerapostion ;
-	currvertexpos = rotmatrix*currvertexpos; 
-
-
-	
-	float imagepointx =   (-180 * (focalLength * (currvertexpos.x / currvertexpos.z))) + (WIDTH/ 2) ;
-	float imagepointy =   (180 * (focalLength * (currvertexpos.y / currvertexpos.z))) + (HEIGHT/ 2) ;
-
-	float depth = INFINITY;
-
-	if (currvertexpos.z != 0.0){
-		depth = abs(1/currvertexpos.z);
-	}
-
-	
-
-	return CanvasPoint (imagepointx, imagepointy, depth);
-
-}
-
-RayTriangleIntersection getClosestIntersection(glm::vec3 camerapostion, glm::vec3 raydirection, std::vector<ModelTriangle> triangle){
-
-	RayTriangleIntersection closeintersectionpoint ;
-
-
-	for(int i = 0 ; i<triangle.size(); i++){
-
-		glm::vec3 e0 = triangle[i].vertices[1] - triangle[i].vertices[0];
-		glm::vec3 e1 = triangle[i].vertices[2] - triangle[i].vertices[0];
-		glm::vec3 SPVector = cameraposition - triangle[i].vertices[0];
-		glm::mat3 DEMatrix(-raydirection, e0, e1);
-		glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
-
-		float closevalcheck = INFINITY;
-
-		// (u >= 0.0) && (u <= 1.0)
-		// (v >= 0.0) && (v <= 1.0)
-		// (u + v) <= 1.0
-		if ( (possibleSolution.y>= 0.0 && possibleSolution.y <= 1.0 )&& (possibleSolution.z>= 0.0 && possibleSolution.z <= 1.0) && (possibleSolution.y+possibleSolution.z <= 1.0) && possibleSolution.x > 0 ){
-			if (possibleSolution.x < closevalcheck){
-
-
-			//storing closest intersection point values
-			glm::vec3 intersecpoint = triangle[i].vertices[0] + possibleSolution.y * (triangle[i].vertices[1]-triangle[i].vertices[0]) + possibleSolution.z*(triangle[i].vertices[2] - triangle[i].vertices[0]);
-
-			closeintersectionpoint.intersectionPoint = intersecpoint;
-			closeintersectionpoint.distanceFromCamera= possibleSolution.x;
-			closeintersectionpoint.intersectedTriangle = triangle[i];
-			closeintersectionpoint.triangleIndex = i;
-
-			closevalcheck = possibleSolution.x;
-
-
-			}	
-
-		}
-		
-
-	}
-	return closeintersectionpoint;
-	
-}
-
-void renderPointCloud (std::vector<ModelTriangle> triangles, glm::vec3 cameraposition, float focallength, DrawingWindow &window ){
-
-	int r = 255 ;
-	int g = 255 ;
-	int b = 255 ;
-
-	uint32_t colour = (255 << 24) + (int(r) << 16) + (int(g) << 8) + int(b);
-
-	for( int i=0; i<triangles.size(); i++){
-
-		CanvasPoint v0 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[0], focallength);
-		CanvasPoint v1 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[1], focallength);
-		CanvasPoint v2 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[2], focallength);
-
-		if( (v0.x >= 0 && v0.x< WIDTH) && (v0.y >= 0 && v0.y< HEIGHT)){
-			
-			window.setPixelColour(v0.x, v0.y, colour);
-			
-
-		}
-		if( (v1.x >= 0 && v1.x< WIDTH) && (v1.y >= 0 && v1.y< HEIGHT)){
-
-			window.setPixelColour(v1.x, v1.y, colour);
-
-		}
-		if( (v2.x >= 0 && v2.x< WIDTH) && (v2.y >= 0 && v2.y< HEIGHT)){
-
-			window.setPixelColour(v2.x, v2.y, colour);
-
-		}
-		
-		
-	}
-
-}
-
-void wireFrameRender(std::vector<ModelTriangle> triangles, glm::vec3 cameraposition, float focallength, DrawingWindow &window ){
-
-	int r = 255 ;
-	int g = 255 ;
-	int b = 255 ;
-
-	//uint32_t colour = (255 << 24) + (int(r) << 16) + (int(g) << 8) + int(b);
-	Colour colour(r,g,b);
-
-	for( int i=0; i<triangles.size(); i++){
-
-		CanvasPoint v0 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[0], focallength);
-		CanvasPoint v1 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[1], focallength);
-		CanvasPoint v2 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[2], focallength);
-
-		CanvasTriangle triangle(v0, v1, v2);
-
-		drawStrokedTriangles(triangle,colour, window);
-		
-	}
-
-}
-
-void rasterizedRender(std::vector<ModelTriangle> triangles, glm::vec3 cameraposition, float focallength, DrawingWindow &window ){
-	
-
-	for( int i=0; i<triangles.size(); i++){
-
-		CanvasPoint v0 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[0], focallength);
-		CanvasPoint v1 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[1], focallength);
-		CanvasPoint v2 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[2], focallength);
-
-		v0.texturePoint= triangles[i].texturePoints[0];
-		v1.texturePoint= triangles[i].texturePoints[1];
-		v2.texturePoint= triangles[i].texturePoints[2];
-
-		//std::cout<< v0.texturePoint;
-		
-
-		CanvasTriangle imageplanetriangle{v0, v1, v2};
-
-		int r = triangles[i].colour.red ;
-		int g = triangles[i].colour.green;
-		int b = triangles[i].colour.blue;
-
-		Colour colour(r, g,b);
-
-		/*if ( triangles[i].texturePoints.empty() == false ){
-			fillTextureTriangle(imageplanetriangle, window, colour);
-		}*/
-
-		fill(imageplanetriangle, colour, window);
-
-		
-		
-
-		
-	}
-
-
-}
-
-void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
-
-	for(int x = 0; x < WIDTH; x++) {
-		for(int y = 0; y < HEIGHT; y++) {
-			depthbuffer[x][y] = 0.0;
-		}
-	}
-	
-
-	for (float i=0.0; i< WIDTH ; i++){
-		for (float j =0.0; j< HEIGHT ; j++){
-
-			CanvasPoint xpoint ={i,j};
-
-		// float depth = INFINITY;
-
-			//float imagepointx =   (-180 * (focalLength * (currvertexpos.x / currvertexpos.z))) + (WIDTH/ 2) ;
-		
-			float x = ((i- WIDTH/ 2) / 150) / focallength;
-		
-			float y= - (( j- HEIGHT/ 2) / 150) / focallength;
-			float z = -1;
-
-			glm::vec3 raydirection(x,y,z);
-			glm::vec3 normal = glm::normalize(raydirection);
-
-			RayTriangleIntersection ip = getClosestIntersection(cameraposition, normal, triangle);
-
-			int red = ip.intersectedTriangle.colour.red;
-			int blue = ip.intersectedTriangle.colour.blue;
-			int green = ip.intersectedTriangle.colour.green;
-
-			window.setPixelColour(i,j,colourpixel(red,blue,green));
-
-		}
-	}
-}
-
-glm::mat3 lookAt(glm::vec3 target) {
-	glm::vec3 forward = glm::normalize(cameraposition-target);
-	glm::vec3 right = -glm::normalize(glm::cross(forward, glm::vec3(0,1,0)));
-	glm::vec3 up = glm::normalize(glm::cross(forward, right));
-
-	//right up forward
-	return transpose(glm::mat3( right, up, forward ));
-}
-
-void orbitrender(){
-	glm::vec3 target(0.0,0.0,0.0);
-
-	rotmatrix = lookAt(target);
-}
-
-void drawRasterizedScene(DrawingWindow &window, std::vector<ModelTriangle> triangle, bool orbit) {
-
-	for(int x = 0; x < WIDTH; x++) {
-		for(int y = 0; y < HEIGHT; y++) {
-			depthbuffer[x][y] = 0.0;
-		}
-	}
-	window.clearPixels(); 
-
-	 
-
-	if (orbit){
-		glm::mat3 newrotationMat(
-			glm::cos(rotchange),0.0,-glm::sin(rotchange),
-			0.0,1.0,0.0,
-			glm::sin(rotchange),0.0,glm::cos(rotchange)
-		);
-		cameraposition = newrotationMat * cameraposition;
-		orbitrender();
-	}
-	//rotmatrix = newrotationMat * rotmatrix;
-	
-
-	
-
-	rasterizedRender(triangle, cameraposition, focallength, window);
-	
 
 }
 
