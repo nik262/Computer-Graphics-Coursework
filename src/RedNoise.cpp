@@ -21,14 +21,17 @@
 
 #define WIDTH 320
 #define HEIGHT 240
+enum RenderMode { WIREFRAME, RASTERIZING, RAYTRACING };
+RenderMode rendermode = RASTERIZING;
 
 Colour BLACK(255,255,255);
+
 
 std::vector<std::vector<float>> depthbuffer;
 glm::vec3 cameraposition(0.0, 0.0, 4.0);
 float camposchange = 0.1;
 float focallength = 2.0 ;
-glm::vec3 lightsource(0.85, 0.85, 0.0);
+glm::vec3 lightsource(0.0, 0.85, 0.0);
 
 std::string mappath;
 
@@ -74,6 +77,39 @@ uint32_t colourpixel (int red, int blue, int green ){
 
 	uint32_t colour = (255 << 24) + (int(red) << 16) + (int(green) << 8) + int(blue);
 	return colour;
+}
+
+CanvasTriangle genRandomTriangle(DrawingWindow &window){
+
+	float rpoint1 = rand() % window.width ;
+	float rpoint2 = rand() % window.height ;
+	float rpoint3 = rand() % window.width ;
+	float rpoint4 = rand() % window.height ;
+	float rpoint5 = rand() % window.width ;
+	float rpoint6 = rand() % window.height  ;
+
+	int r = rand() % 256 ;
+	int g = rand() % 256 ;
+	int b = rand() %256 ;
+
+	Colour colour(r,g,b);
+
+	CanvasPoint v1;
+	v1.x=rpoint1;
+	v1.y=rpoint2;
+
+	CanvasPoint v2;
+	v2.x=rpoint3;
+	v2.y=rpoint4;
+
+	CanvasPoint v3;
+	v3.x=rpoint5;
+	v3.y=rpoint6;
+
+	CanvasTriangle trianglepoints(v1,v2,v3);
+
+	return trianglepoints;
+
 }
 
 void drawLine( CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &window ){
@@ -519,7 +555,9 @@ void drawRasterizedScene(DrawingWindow &window, std::vector<ModelTriangle> trian
 
 RayTriangleIntersection getClosestIntersection(glm::vec3 startpostion, glm::vec3 raydirection, std::vector<ModelTriangle> triangle){
 
+
 	RayTriangleIntersection closeintersectionpoint ;
+	
 	float closevalcheck = INFINITY;
 
 
@@ -539,6 +577,7 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 startpostion, glm::vec3
 				(possibleSolution.y+possibleSolution.z <= 1.0) && 
 				(possibleSolution.x > 0 ) && 
 				(possibleSolution.x < closevalcheck)
+			
 			){
 			
 			closevalcheck = possibleSolution.x;
@@ -558,10 +597,12 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 startpostion, glm::vec3
 	return closeintersectionpoint;	
 	
 }
-RayTriangleIntersection getShadowClosestIntersection(glm::vec3 startpostion, glm::vec3 raydirection, std::vector<ModelTriangle> triangle, int triangleindex){
+RayTriangleIntersection getClosestIntersection(glm::vec3 startpostion, glm::vec3 raydirection, std::vector<ModelTriangle> triangle, int triangleindex){
 
 	RayTriangleIntersection closeintersectionpoint ;
 	float closevalcheck = INFINITY;
+
+	float distance =glm::length(raydirection);
 
 
 	for(int i = 0 ; i<triangle.size(); i++){
@@ -581,6 +622,7 @@ RayTriangleIntersection getShadowClosestIntersection(glm::vec3 startpostion, glm
 				(possibleSolution.x > 0 ) && 
 				(possibleSolution.x < closevalcheck) &&
 				( i != triangleindex) 
+				//(possibleSolution.x < distance)
 				
 			){
 			
@@ -636,7 +678,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 			glm::vec3 lightdirec = glm::normalize(light);
 
 
-			RayTriangleIntersection shadowip = getShadowClosestIntersection(ip.intersectionPoint, lightdirec ,triangle, ip.triangleIndex);
+			RayTriangleIntersection shadowip = getClosestIntersection(ip.intersectionPoint, lightdirec ,triangle, ip.triangleIndex);
 
 		
 			
@@ -644,23 +686,14 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 			int blue = ip.intersectedTriangle.colour.blue;
 			int green = ip.intersectedTriangle.colour.green;
 
-			// window.setPixelColour(i,j,colourpixel(red,blue,green));
+			if (shadowip.distanceFromCamera < glm::length(lightdirec)){
 
-			// if (shadowip.intersectedTriangle.vertices.empty()==false ){
-			// 	window.setPixelColour(i,j,colourpixel(0,0,0));
-			// }
-
-			if (shadowip.distanceFromCamera < glm::length (lightdirec)){
 				window.setPixelColour(i,j,colourpixel(0, 0, 0));
-
 			}
 			else{
 				window.setPixelColour(i,j,colourpixel(red,blue,green));
 
 			}
-				
-		
-			
 
 		}
 	}
@@ -776,51 +809,44 @@ std::vector<ModelTriangle> parseObj (std::string mtlfilepath, std::string objfil
 }
 
 //keypress takes in window, randmoizes canvas points makes a canvas traingle; randomizes a color and makes a triangle with all of the above 
-void keypress(DrawingWindow &window){
+void draw(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 
-	float rpoint1 = rand() % window.width ;
-	float rpoint2 = rand() % window.height ;
-	float rpoint3 = rand() % window.width ;
-	float rpoint4 = rand() % window.height ;
-	float rpoint5 = rand() % window.width ;
-	float rpoint6 = rand() % window.height  ;
+	for(int x = 0; x < WIDTH; x++) {
+		for(int y = 0; y < HEIGHT; y++) {
+			depthbuffer[x][y] = 0.0;
+		}
+	}
 
+	window.clearPixels();
+	
+	switch (rendermode)
+	{
+	case WIREFRAME:
+		
+		wireFrameRender(triangle, cameraposition, focallength, window);
+		break;
 
-	int r = rand() % 256 ;
-	int g = rand() % 256 ;
-	int b = rand() %256 ;
+	case RASTERIZING:
+		rasterizedRender(triangle, cameraposition, focallength, window);
+		break;
 
-	Colour colour(r,g,b);
+	case RAYTRACING:
 
-	CanvasPoint v1;
-	v1.x=rpoint1;
-	v1.y=rpoint2;
+		drawRayTrace(window, triangle);
+		break;
+	}
+	
 
-	CanvasPoint v2;
-	v2.x=rpoint3;
-	v2.y=rpoint4;
+	//std::vector<ModelTriangle>  x = parseObj("cornell-box.mtl","cornell-box.obj", 0.35);
 
-	CanvasPoint v3;
-	v3.x=rpoint5;
-	v3.y=rpoint6;
-
-	CanvasTriangle trianglepoints(v1,v2,v3);
-	//drawStrokedTriangles(trianglepoints,colour,window);
-
-	std::vector<ModelTriangle>  x = parseObj("cornell-box.mtl","cornell-box.obj", 0.35);
-
-	// for(int i=0 ; i<x.size(); i++){
-	// 	std::cout << x[i];
-	// }
-
-	//glm::vec3 cameraposition(0.0, 0.0, 4.0);
-	//float focallength = 2.0 ; 
+	
+	
 
 	//renderPointCloud(x, cameraposition, focallength, window);
 
 	//wireFrameRender(x, cameraposition, focallength, window);
 
-	drawRayTrace(window, x);
+	//drawRayTrace(window, x);
 
 	//rasterizedRender(x, cameraposition, focallength, window);
 
@@ -839,6 +865,10 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		else if (event.key.keysym.sym == SDLK_d) cameraposition.x = cameraposition.x-camposchange;
 		else if (event.key.keysym.sym == SDLK_q) cameraposition.z = cameraposition.z-camposchange;
 		else if (event.key.keysym.sym == SDLK_e) cameraposition.z = cameraposition.z+camposchange;
+
+		else if (event.key.keysym.sym == SDLK_v) rendermode=WIREFRAME;
+		else if (event.key.keysym.sym == SDLK_b) rendermode=RASTERIZING;
+		else if (event.key.keysym.sym == SDLK_n) rendermode=RAYTRACING;
 		
 
 		else if (event.key.keysym.sym == SDLK_j) {
@@ -886,7 +916,6 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 			orbit = !orbit;
 		}
 
-		else if (event.key.keysym.sym == SDLK_t) keypress(window);
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
@@ -943,7 +972,7 @@ int main(int argc, char *argv[]) {
 		//fillTextureTriangle(trianglepoints, window, colour);
 		
 		//drawRasterizedScene(window,x,orbit);
-		//draw(window, x);
+		draw(window, x);
 
 		//drawLine(from,to,colour,window);
 		//drawStrokedTriangles(trianglepoints,colour,window);
