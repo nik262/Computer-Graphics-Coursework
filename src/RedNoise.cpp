@@ -602,7 +602,7 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 startpostion, glm::vec3
 	RayTriangleIntersection closeintersectionpoint ;
 	float closevalcheck = INFINITY;
 
-	float distance =glm::length(raydirection);
+	//float distance =glm::length(raydirection);
 
 
 	for(int i = 0 ; i<triangle.size(); i++){
@@ -664,7 +664,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 		
 			float x = ((i- WIDTH/ 2) / 180) / focallength;
 		
-			float y= - (( j- HEIGHT/ 2) / 180) / focallength;
+			float y=  -(( j- HEIGHT/ 2) / 180) / focallength;
 			float z = -1;
 
 			glm::vec3 raypoint(x,y,z);
@@ -680,15 +680,20 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 
 			RayTriangleIntersection shadowip = getClosestIntersection(ip.intersectionPoint, lightdirec ,triangle, ip.triangleIndex);
 
+
+			//find intensity val using 1/4pi r^2,  
+			float brightnessval = 6/ (4* M_PI * (pow(glm::length(light), 2))) ;
+			
+
 		
 			
-			int red = ip.intersectedTriangle.colour.red;
-			int blue = ip.intersectedTriangle.colour.blue;
-			int green = ip.intersectedTriangle.colour.green;
+			int red = glm::clamp((ip.intersectedTriangle.colour.red * brightnessval), float(0), float(255));
+			int blue = glm::clamp((ip.intersectedTriangle.colour.blue* brightnessval) ,float(0), float(255));
+			int green = glm::clamp((ip.intersectedTriangle.colour.green* brightnessval) ,float(0), float(255));
 
-			if (shadowip.distanceFromCamera < glm::length(lightdirec)){
+			if (shadowip.distanceFromCamera < glm::length(light) ) {
 
-				window.setPixelColour(i,j,colourpixel(0, 0, 0));
+				window.setPixelColour(i,j,colourpixel(red,blue,green));
 			}
 			else{
 				window.setPixelColour(i,j,colourpixel(red,blue,green));
@@ -835,25 +840,6 @@ void draw(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 		drawRayTrace(window, triangle);
 		break;
 	}
-	
-
-	//std::vector<ModelTriangle>  x = parseObj("cornell-box.mtl","cornell-box.obj", 0.35);
-
-	
-	
-
-	//renderPointCloud(x, cameraposition, focallength, window);
-
-	//wireFrameRender(x, cameraposition, focallength, window);
-
-	//drawRayTrace(window, x);
-
-	//rasterizedRender(x, cameraposition, focallength, window);
-
-	//fill(trianglepoints, colour, window);
-
-
-
 
 }
 
@@ -956,28 +942,12 @@ int main(int argc, char *argv[]) {
 	// v2.texturePoint.y=330;
 	// CanvasTriangle trianglepoints(v0,v1,v2) ;
 
-	// Colour colour;
-	// colour.blue=255;
-	// colour.green=255;
-	// colour.red=255;
-
-
-	
-
-
-
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window);
-		//fillTextureTriangle(trianglepoints, window, colour);
-		
-		//drawRasterizedScene(window,x,orbit);
+	
 		draw(window, x);
 
-		//drawLine(from,to,colour,window);
-		//drawStrokedTriangles(trianglepoints,colour,window);
-
-		
 		// Need to render the frame at the end, or nothing actually gets shown on the screen !
 		window.renderFrame();
 	}
