@@ -29,9 +29,11 @@ Colour BLACK(255,255,255);
 
 std::vector<std::vector<float>> depthbuffer;
 glm::vec3 cameraposition(0.0, 0.0, 4.0);
+glm::vec3 lightsource(0.0, 0.55, 0.25);
+float lightposchange = 0.2;
 float camposchange = 0.1;
 float focallength = 2.0 ;
-glm::vec3 lightsource(0.0, 0.85, 0.0);
+
 
 std::string mappath;
 
@@ -525,12 +527,6 @@ void orbitrender(){
 
 void drawRasterizedScene(DrawingWindow &window, std::vector<ModelTriangle> triangle, bool orbit) {
 
-	for(int x = 0; x < WIDTH; x++) {
-		for(int y = 0; y < HEIGHT; y++) {
-			depthbuffer[x][y] = 0.0;
-		}
-	}
-	window.clearPixels(); 
 
 	 
 
@@ -558,7 +554,7 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 startpostion, glm::vec3
 
 	RayTriangleIntersection closeintersectionpoint ;
 	
-	float closevalcheck = INFINITY;
+	closeintersectionpoint.distanceFromCamera = INFINITY;
 
 
 	for(int i = 0 ; i<triangle.size(); i++){
@@ -576,11 +572,11 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 startpostion, glm::vec3
 				(possibleSolution.z>= 0.0 && possibleSolution.z <= 1.0) && 
 				(possibleSolution.y+possibleSolution.z <= 1.0) && 
 				(possibleSolution.x > 0 ) && 
-				(possibleSolution.x < closevalcheck)
+				(possibleSolution.x < closeintersectionpoint.distanceFromCamera)
 			
 			){
 			
-			closevalcheck = possibleSolution.x;
+		
 
 			//storing closest intersection point values
 			glm::vec3 intersecpoint = triangle[i].vertices[0] + possibleSolution.y * (triangle[i].vertices[1]-triangle[i].vertices[0]) + possibleSolution.z*(triangle[i].vertices[2] - triangle[i].vertices[0]);
@@ -600,10 +596,7 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 startpostion, glm::vec3
 RayTriangleIntersection getClosestIntersection(glm::vec3 startpostion, glm::vec3 raydirection, std::vector<ModelTriangle> triangle, int triangleindex){
 
 	RayTriangleIntersection closeintersectionpoint ;
-	float closevalcheck = INFINITY;
-
-	//float distance =glm::length(raydirection);
-
+	closeintersectionpoint.distanceFromCamera = INFINITY;
 
 	for(int i = 0 ; i<triangle.size(); i++){
 		
@@ -620,28 +613,21 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 startpostion, glm::vec3
 				(possibleSolution.z>= 0.0 && possibleSolution.z <= 1.0) && 
 				(possibleSolution.y+possibleSolution.z <= 1.0) && 
 				(possibleSolution.x > 0 ) && 
-				(possibleSolution.x < closevalcheck) &&
+				(possibleSolution.x < closeintersectionpoint.distanceFromCamera) &&
 				( i != triangleindex) 
-				//(possibleSolution.x < distance)
-				
-			){
-			
-			closevalcheck = possibleSolution.x;
+			){	
 
+			
 			//storing closest intersection point values
-			glm::vec3 intersecpoint = triangle[i].vertices[0] + possibleSolution.y * (triangle[i].vertices[1]-triangle[i].vertices[0]) + possibleSolution.z*(triangle[i].vertices[2] - triangle[i].vertices[0]);
+			glm::vec3 intersecpoint = triangle[i].vertices[0] + (possibleSolution.y * e0) + (possibleSolution.z * e1);
 
 			closeintersectionpoint.intersectionPoint = intersecpoint;
 			closeintersectionpoint.distanceFromCamera= possibleSolution.x;
 			closeintersectionpoint.intersectedTriangle = triangle[i];
 			closeintersectionpoint.triangleIndex = i;
-
 		}
-	
 	}
-
-	return closeintersectionpoint;	
-	
+	return closeintersectionpoint;
 }
 
 void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
@@ -653,8 +639,8 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 	}
 	
 
-	for (float i=0.0; i< WIDTH ; i++){
-		for (float j =0.0; j< HEIGHT ; j++){
+	for (float i=0; i< 		WIDTH ; i++){
+		for (float j =0; j< HEIGHT ; j++){
 
 			CanvasPoint xpoint ={i,j};
 
@@ -670,8 +656,6 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 			glm::vec3 raypoint(x,y,z);
 			glm::vec3 raydirection = glm::normalize(raypoint);
 
-			
-
 			RayTriangleIntersection ip = getClosestIntersection(cameraposition, raydirection, triangle);
 
 			glm::vec3 light = lightsource - ip.intersectionPoint ; 
@@ -681,23 +665,74 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 			RayTriangleIntersection shadowip = getClosestIntersection(ip.intersectionPoint, lightdirec ,triangle, ip.triangleIndex);
 
 
-			//find intensity val using 1/4pi r^2,  
-			float brightnessval = 6/ (4* M_PI * (pow(glm::length(light), 2))) ;
-			
+			//find prox val using 1/4pi r^2,  
+			float proxval (4/ (2* M_PI * (pow(glm::length(light), 2))) );
 
-		
+			//find ip triangle index  aoi
+            // glm::vec3 normal = ip.intersectedTriangle.normal;
+            float aoi = (glm::dot( ip.intersectedTriangle.normal, lightdirec));
+
+			//glm::clamp( (glm::dot( ip.intersectedTriangle.normal, lightdirec)), float(0.1), float(1));
+
+			 //specular 
+            glm::vec3 cameradirec = cameraposition- ip.intersectionPoint;
+            glm::vec3 ncameradirec = glm::normalize(cameradirec);
+
+            glm::vec3 reflectionvec = lightdirec - ( 2.0f * ( ip.intersectedTriangle.normal)  * glm::dot(ip.intersectedTriangle.normal, lightdirec));
+            float vecrefdot =  (glm::dot( reflectionvec, ncameradirec));
+
+            float specval = glm::clamp( float(glm::pow( vecrefdot, 256)), float(0.1), float(1.0) );
+			//glm::clamp( float(glm::pow( vecrefdot, 256)), float(0.1), float(1.0) );
+
+			float breaker1 = 1001;
+			float breaker2 = 1002;
+			float breaker3 = 1003;
+			float breaker4 = 1004;
+			float breaker5 = 1005;
+
+			// std::cout<< breaker1<<std::endl;
+
+			// std::cout<< ip.intersectedTriangle.normal.x<<std::endl;
+			// std::cout<< ip.intersectedTriangle.normal.y<<std::endl;
+			// std::cout<< ip.intersectedTriangle.normal.z<<std::endl;
+
+			// std::cout<< breaker2<<std::endl;
+
+			// std::cout<< aoi<<std::endl;
+			// // std::cout<< light.x<<std::endl;
+			// // std::cout<<light.y<<std::endl;
+			// // std::cout<< light.z<<std::endl;
+
+			// std::cout<< breaker3<<std::endl;
+
+			// std::cout<< lightdirec.x<<std::endl;
+			// std::cout<<lightdirec.y<<std::endl;
+			// std::cout<< lightdirec.z<<std::endl;
+
+			// std::cout<< breaker4<<std::endl;
+
+			// std::cout<< reflectionvec.x<<std::endl;ma
+			// std::cout<<reflectionvec.y<<std::endl;
+			// std::cout<< reflectionvec.z<<std::endl;
+
+			//* proxval * aoi * specval	
+			int red = glm::clamp((ip.intersectedTriangle.colour.red* glm::clamp(float((proxval * aoi )+specval), 0.0f,1.0f)), float(0), float(255));
+			int blue = glm::clamp((ip.intersectedTriangle.colour.blue* glm::clamp(float((proxval * aoi )+specval), 0.0f,1.0f)) ,float(0), float(255));
+			int green = glm::clamp((ip.intersectedTriangle.colour.green* glm::clamp(float((proxval * aoi )+specval), 0.0f,1.0f)) ,float(0), float(255));
+
+			// std::cout<< breaker5<<std::endl;
+
+			// std::cout<< red<<std::endl;
+			// std::cout<<blue<<std::endl;
+			// std::cout<< green<<std::endl;
+
 			
-			int red = glm::clamp((ip.intersectedTriangle.colour.red * brightnessval), float(0), float(255));
-			int blue = glm::clamp((ip.intersectedTriangle.colour.blue* brightnessval) ,float(0), float(255));
-			int green = glm::clamp((ip.intersectedTriangle.colour.green* brightnessval) ,float(0), float(255));
 
 			if (shadowip.distanceFromCamera < glm::length(light) ) {
-
-				window.setPixelColour(i,j,colourpixel(red,blue,green));
+				window.setPixelColour(i,j,colourpixel(0,0,0));
 			}
 			else{
 				window.setPixelColour(i,j,colourpixel(red,blue,green));
-
 			}
 
 		}
@@ -776,22 +811,47 @@ std::vector<ModelTriangle> parseObj (std::string mtlfilepath, std::string objfil
 		}
 
 		if(token[0]== "f"){
-
+			//each face
 			std::string f1= token[1];
 			std::string f2= token[2];
 			std::string f3= token[3];
+
+			//splitting values by / so the values before the / i.e in index [0] is what we need for normal canvaspoints
 			std::vector<std::string> fslash1 = split(f1, '/');
 			std::vector<std::string> fslash2 = split(f2, '/');
 			std::vector<std::string> fslash3 = split(f3, '/');
 
-			//For each index in f
+			//makings vec 3s for triangle points and texture points
 			std::array<glm::vec3, 3> trianglePoints;
 			std::array<TexturePoint, 3> selectedTexturePoints;
 
-
+			// logic for if a triangle only has triangle points and no texture points
 			if ((fslash1[1].empty() == true) && (fslash2[1].empty() == true) && (fslash3[1].empty() == true)){
+				//assigning vertices
+				glm::vec3 v0 = vertices[ stoi(fslash1[0])-1];
+                glm::vec3 v1 = vertices[ stoi(fslash2[0])-1] ;
+                glm::vec3 v2 =vertices[ stoi(fslash3[0])-1];
 
-				triangles.push_back(ModelTriangle( vertices[ stoi(fslash1[0])- 1], vertices[ stoi(fslash2[0])- 1], vertices[ stoi(fslash3[0])- 1], colhashmap[colourname] ) );
+	  			//storing those vertices in a model triangle variable
+                ModelTriangle storetriangle = ModelTriangle( vertices[ stoi(fslash1[0])- 1], vertices[ stoi(fslash2[0])- 1], vertices[ stoi(fslash3[0])- 1], colhashmap[colourname] ) ;
+                glm::vec3 a = v1 - v0;
+                glm::vec3 b = v2-v0 ;
+				// glm::vec3 ab = glm::normalize(glm::cross(a,b)) ;
+				// float breaker = 101.0;
+				// std::cout<< ab.x<<std::endl;
+				// std::cout<< ab.y<<std::endl;
+				// std::cout<< ab.z<<std::endl;
+				// std::cout<< breaker<<std::endl;
+
+
+
+				//cross product to get the normal
+                storetriangle.normal = glm::normalize(glm::cross(a,b));
+				//storing that in the triangles
+                triangles.push_back(storetriangle);
+
+
+				//triangles.push_back(ModelTriangle( vertices[ stoi(fslash1[0])- 1], vertices[ stoi(fslash2[0])- 1], vertices[ stoi(fslash3[0])- 1], colhashmap[colourname] ) );
 			}
 			else{
 
@@ -801,8 +861,8 @@ std::vector<ModelTriangle> parseObj (std::string mtlfilepath, std::string objfil
 				selectedTexturePoints[2] = texturevertices[stoi(fslash3[1]) - 1];
 			}
 
-			ModelTriangle triangle = ModelTriangle();
-			triangle.texturePoints= selectedTexturePoints;
+			// ModelTriangle triangle = ModelTriangle();
+			// triangle.texturePoints= selectedTexturePoints;
 
 		}
 	}
@@ -832,7 +892,7 @@ void draw(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 		break;
 
 	case RASTERIZING:
-		rasterizedRender(triangle, cameraposition, focallength, window);
+		drawRasterizedScene(window,triangle, orbit);
 		break;
 
 	case RAYTRACING:
@@ -843,7 +903,7 @@ void draw(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 
 }
 
-void handleEvent(SDL_Event event, DrawingWindow &window) {
+void handleEvent(SDL_Event event, DrawingWindow &window,std::vector<ModelTriangle> triangle ) {
 	if (event.type == SDL_KEYDOWN) {
 		if (event.key.keysym.sym == SDLK_w) cameraposition.y = cameraposition.y-camposchange;
 		else if (event.key.keysym.sym == SDLK_a) cameraposition.x = cameraposition.x+camposchange;
@@ -851,6 +911,13 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		else if (event.key.keysym.sym == SDLK_d) cameraposition.x = cameraposition.x-camposchange;
 		else if (event.key.keysym.sym == SDLK_q) cameraposition.z = cameraposition.z-camposchange;
 		else if (event.key.keysym.sym == SDLK_e) cameraposition.z = cameraposition.z+camposchange;
+
+		else if (event.key.keysym.sym == SDLK_p) lightsource.x = lightsource.x+lightposchange;
+		else if (event.key.keysym.sym == SDLK_9) lightsource.y = lightsource.y+lightposchange;
+		else if (event.key.keysym.sym == SDLK_o) lightsource.y = lightsource.y-lightposchange;
+		else if (event.key.keysym.sym == SDLK_i) lightsource.x = lightsource.x-lightposchange;
+		else if (event.key.keysym.sym == SDLK_7) lightsource.z = lightsource.z-lightposchange;
+		else if (event.key.keysym.sym == SDLK_8) lightsource.z = lightsource.z+lightposchange;
 
 		else if (event.key.keysym.sym == SDLK_v) rendermode=WIREFRAME;
 		else if (event.key.keysym.sym == SDLK_b) rendermode=RASTERIZING;
@@ -898,9 +965,10 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 
 		}
 
-		else if(event.key.keysym.sym == SDLK_o) {
+		else if(event.key.keysym.sym == SDLK_x) {
 			orbit = !orbit;
 		}
+		else if (event.key.keysym.sym == SDLK_g) drawRayTrace(window, triangle);
 
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
@@ -928,6 +996,7 @@ int main(int argc, char *argv[]) {
 	// CanvasPoint v0 ;
 	// v0.x=160;
 	// v0.y=10;
+
 	// v0.texturePoint.x=195;
 	// v0.texturePoint.y=5;
 	// CanvasPoint v1 ;
@@ -944,7 +1013,7 @@ int main(int argc, char *argv[]) {
 
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
-		if (window.pollForInputEvents(event)) handleEvent(event, window);
+		if (window.pollForInputEvents(event)) handleEvent(event, window, x);
 	
 		draw(window, x);
 
