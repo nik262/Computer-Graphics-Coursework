@@ -29,7 +29,7 @@ Colour BLACK(255,255,255);
 
 std::vector<std::vector<float>> depthbuffer;
 glm::vec3 cameraposition(0.0, 0.0, 4.0);
-glm::vec3 lightsource(0.0, 0.55, 0.25);
+glm::vec3 lightsource(0.60, 0.55, 0.25);
 float lightposchange = 0.2;
 float camposchange = 0.1;
 float focallength = 2.0 ;
@@ -480,11 +480,29 @@ void rasterizedRender(std::vector<ModelTriangle> triangles, glm::vec3 cameraposi
 		CanvasPoint v1 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[1], focallength);
 		CanvasPoint v2 = getCanvasIntersectionPoint(cameraposition, triangles[i].vertices[2], focallength);
 
-		v0.texturePoint= triangles[i].texturePoints[0];
-		v1.texturePoint= triangles[i].texturePoints[1];
-		v2.texturePoint= triangles[i].texturePoints[2];
+		if ( triangles[i].texturePoints.empty() ==false){
+			
+			v0.texturePoint.x= triangles[i].texturePoints[0].x;
+			v0.texturePoint.y= triangles[i].texturePoints[1].y;
 
-		//std::cout<< v0.texturePoint;
+			v1.texturePoint.x= triangles[i].texturePoints[0].x;
+			v1.texturePoint.y= triangles[i].texturePoints[1].y;
+
+			v2.texturePoint.x= triangles[i].texturePoints[0].x;
+			v2.texturePoint.y= triangles[i].texturePoints[1].y;
+		}
+
+		// v0.texturePoint.x= triangles[i].texturePoints[0].x;
+		// v0.texturePoint.y= triangles[i].texturePoints[1].y;
+
+		// v1.texturePoint.x= triangles[i].texturePoints[0].x;
+		// v1.texturePoint.y= triangles[i].texturePoints[1].y;
+
+		// v2.texturePoint.x= triangles[i].texturePoints[0].x;
+		// v2.texturePoint.y= triangles[i].texturePoints[1].y;
+
+
+		//std::cout<< v0.texturePoint.x<<std::endl;
 		
 
 		CanvasTriangle imageplanetriangle{v0, v1, v2};
@@ -495,11 +513,14 @@ void rasterizedRender(std::vector<ModelTriangle> triangles, glm::vec3 cameraposi
 
 		Colour colour(r, g,b);
 
-		/*if ( triangles[i].texturePoints.empty() == false ){
+		if ( triangles[i].texturePoints.empty() ){
+			
+			fill(imageplanetriangle, colour, window);
+		}
+		else{
 			fillTextureTriangle(imageplanetriangle, window, colour);
-		}*/
-
-		fill(imageplanetriangle, colour, window);
+		}
+		
 
 		
 		
@@ -659,6 +680,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 			RayTriangleIntersection ip = getClosestIntersection(cameraposition, raydirection, triangle);
 
 			glm::vec3 light = lightsource - ip.intersectionPoint ; 
+			float lightdist = glm::distance(lightsource ,ip.intersectionPoint ); 
 			glm::vec3 lightdirec = glm::normalize(light);
 
 
@@ -666,7 +688,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 
 
 			//find prox val using 1/4pi r^2,  
-			float proxval (4/ (2* M_PI * (pow(glm::length(light), 2))) );
+			float proxval (6/ (2* M_PI * lightdist*lightdist) );
 
 			//find ip triangle index  aoi
             // glm::vec3 normal = ip.intersectedTriangle.normal;
@@ -681,7 +703,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
             glm::vec3 reflectionvec = lightdirec - ( 2.0f * ( ip.intersectedTriangle.normal)  * glm::dot(ip.intersectedTriangle.normal, lightdirec));
             float vecrefdot =  (glm::dot( reflectionvec, ncameradirec));
 
-            float specval = glm::clamp( float(glm::pow( vecrefdot, 256)), float(0.1), float(1.0) );
+            float specval =  float(glm::pow( vecrefdot, 256));
 			//glm::clamp( float(glm::pow( vecrefdot, 256)), float(0.1), float(1.0) );
 
 			float breaker1 = 1001;
@@ -716,9 +738,13 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 			// std::cout<< reflectionvec.z<<std::endl;
 
 			//* proxval * aoi * specval	
-			int red = glm::clamp((ip.intersectedTriangle.colour.red* glm::clamp(float((proxval * aoi )+specval), 0.0f,1.0f)), float(0), float(255));
-			int blue = glm::clamp((ip.intersectedTriangle.colour.blue* glm::clamp(float((proxval * aoi )+specval), 0.0f,1.0f)) ,float(0), float(255));
-			int green = glm::clamp((ip.intersectedTriangle.colour.green* glm::clamp(float((proxval * aoi )+specval), 0.0f,1.0f)) ,float(0), float(255));
+			int red = glm::clamp((ip.intersectedTriangle.colour.red* (glm::clamp(float(((proxval * aoi)+specval)), 0.3f,1.0f) )), float(0), float(255));
+			int blue = glm::clamp((ip.intersectedTriangle.colour.blue* (glm::clamp(float(((proxval * aoi)+specval)), 0.2f,1.0f) )) ,float(0), float(255));
+			int green = glm::clamp((ip.intersectedTriangle.colour.green* (glm::clamp(float(((proxval * aoi)+specval)), 0.2f,1.0f) )) ,float(0), float(255));
+
+			int red0 = ip.intersectedTriangle.colour.red;
+			int blue0 = ip.intersectedTriangle.colour.blue;
+			int green0 = ip.intersectedTriangle.colour.green;
 
 			// std::cout<< breaker5<<std::endl;
 
@@ -729,7 +755,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle){
 			
 
 			if (shadowip.distanceFromCamera < glm::length(light) ) {
-				window.setPixelColour(i,j,colourpixel(0,0,0));
+				window.setPixelColour(i,j,colourpixel(red0*0.2f,blue0*0.2f,green0*0.2f));
 			}
 			else{
 				window.setPixelColour(i,j,colourpixel(red,blue,green));
@@ -772,11 +798,23 @@ std::vector<ModelTriangle> parseObj (std::string mtlfilepath, std::string objfil
 			int b = 255* stof(token[3]) ;
 
 			colhashmap[mtlcolourname] = Colour(mtlcolourname, r, g, b );
+
+			// getline(mtlfile, mtlline);
+			// token = split(mtlline, ' ');
+
+			// if(token[0]== "map_Kd"){
+			//  mappath =  token[1];
+		    // }
+
+
 		}
 
 		if(token[0]== "map_Kd"){
 			 mappath =  token[1];
-		}
+		    }
+
+
+		
 
 	}
 	mtlfile.close();
@@ -855,15 +893,19 @@ std::vector<ModelTriangle> parseObj (std::string mtlfilepath, std::string objfil
 			}
 			else{
 
-				triangles.push_back(ModelTriangle( vertices[ stoi(fslash1[0])- 1], vertices[ stoi(fslash2[0])- 1], vertices[ stoi(fslash3[0])- 1], colhashmap[colourname] ) );
+				ModelTriangle storetriangle = ModelTriangle( vertices[ stoi(fslash1[0])- 1], vertices[ stoi(fslash2[0])- 1], vertices[ stoi(fslash3[0])- 1], colhashmap[colourname] ) ;
 				selectedTexturePoints[0] = texturevertices[stoi(fslash1[1]) - 1];
+				
 				selectedTexturePoints[1] = texturevertices[stoi(fslash2[1]) - 1];
 				selectedTexturePoints[2] = texturevertices[stoi(fslash3[1]) - 1];
+				std::cout<<selectedTexturePoints[0] <<std::endl;
+				std::cout<<selectedTexturePoints[1] <<std::endl;
+				std::cout<<selectedTexturePoints[2] <<std::endl;
+				storetriangle.texturePoints= selectedTexturePoints;
+				triangles.push_back(storetriangle);
 			}
 
-			// ModelTriangle triangle = ModelTriangle();
-			// triangle.texturePoints= selectedTexturePoints;
-
+			
 		}
 	}
 
@@ -989,8 +1031,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	std::vector<ModelTriangle>  x = parseObj("cornell-box.mtl","cornell-box.obj", 0.35);
-	//std::vector<ModelTriangle>  x = parseObj("materials.mtl","logo.obj", 0.35);
+	//std::vector<ModelTriangle>  x = parseObj("cornell-box.mtl","cornell-box.obj", 0.35);
+	std::vector<ModelTriangle>  x = parseObj("textured-cornell-box.mtl","textured-cornell-box.obj", 0.35);
 
 	// texture mapping points
 	// CanvasPoint v0 ;
