@@ -513,13 +513,13 @@ void rasterizedRender(std::vector<ModelTriangle> triangles, glm::vec3 cameraposi
 
 		Colour colour(r, g,b);
 
-		if ( triangles[i].texturePoints.empty() ){
+		//if ( triangles[i].texturePoints.empty() ){
 			
 			fill(imageplanetriangle, colour, window);
-		}
-		else{
-			fillTextureTriangle(imageplanetriangle, window, colour);
-		}
+		//}
+		//else{
+			//fillTextureTriangle(imageplanetriangle, window, colour);
+		//}
 		
 
 		
@@ -1031,8 +1031,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	//std::vector<ModelTriangle>  x = parseObj("cornell-box.mtl","cornell-box.obj", 0.35);
-	std::vector<ModelTriangle>  x = parseObj("textured-cornell-box.mtl","textured-cornell-box.obj", 0.35);
+	std::vector<ModelTriangle>  x = parseObj("cornell-box.mtl","cornell-box.obj", 0.35);
+	//std::vector<ModelTriangle>  x = parseObj("textured-cornell-box.mtl","textured-cornell-box.obj", 0.35);
 
 	// texture mapping points
 	// CanvasPoint v0 ;
